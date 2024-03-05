@@ -1,0 +1,147 @@
+---
+title: "Webscraping Intro"
+output: html_notebook
+---
+
+https://www.judiciary.uk/?s=&pfd_report_type=alcohol-drug-and-medication-related-deaths&post_type=pfd&order=relevance&after-day=&after-month=&after-year=&before-day=&before-month=&before-year= 
+
+Install packages
+
+rvest is webscraping tool
+
+tidyverse is tidyverse
+
+httr works with http
+
+```{r}
+  library(httr) 
+  library(rvest)
+  library(tidyverse)
+  library(polite)
+```
+
+## Target to create a directory for Prevention of Future death reports
+
+First, we give it the page, name it homeurl and tell it to find the card title
+
+Then, we create a bucket directory of links
+
+Then, for all of these links, we tell it to open the pages and find .related.-content__link
+
+This should give us all the pdfs
+
+. is a shortcut reference to class = 
+
+```{r}
+homeurl <- "https://www.judiciary.uk/?s=&pfd_report_type=alcohol-drug-and-medication-related-deaths&post_type=pfd&order=relevance&after-day=&after-month=&after-year=&before-day=&before-month=&before-year=" 
+```
+
+all the bits we want are in a section called card__title
+easiest way of doing this is to find all the elements within a class - class represented by the .
+html_element("a") lets us find the weblinks
+and then html_attr("href") lets us find the bits of html we want that say href = xxx
+
+this is purely to test that the code can work on one page
+
+```{r}
+page <- read_html(homeurl) %>% 
+  html_elements(".card__title") %>% 
+  html_element("a") %>% 
+  html_attr("href")
+```
+
+This next part reads the first 10 articles - colon tells it to give a range, similar to excel
+
+```{r}
+page[1:10]
+```
+
+Then, we can store the base web address - will be useful later
+
+```{r}
+starturl <- "https://www.judiciary.uk/page/"
+endurl <- "/?s&pfd_report_type=alcohol-drug-and-medication-related-deaths&post_type=pfd&order=relevance&after-day&after-month&after-year&before-day&before-month&before-year"
+```
+
+Then, we glue the start and end together by telling it to find a number sequence - past (/) (a, n, b). This lets it find all 36 web addresses without us having to do anything 
+
+```{r}
+# now we give it a number sequence for the pages we want it to scan
+page_nos <- seq(1,37,1)
+```
+
+now, we paste the parts of the url and the numbers together to create our list of urls
+
+```{r}
+urls <- paste0(starturl, page_nos, endurl)
+```
+
+now, we can make a slightly more complex code to loop through all of the pages and read the htmls of each web address
+
+map means create a list of
+
+.x means give me each page within pdf_links one at a time, and do the following for each of these. shortcut for not having to write page numbers out
+
+then find the card title,
+
+then find the a,
+
+then grab the attribute
+
+this is the same as the first bit of code that we ran, but it goes through each url individually
+
+```{r}
+pdfs <- map(urls, ~ {
+    .x %>% 
+      read_html() %>% 
+      html_elements(".card__title") %>% 
+      html_element("a") %>% 
+      html_attr("href")
+})
+```
+
+this gives us 37 lists of 10, so we want to flatten it to one list. the unlist function does this for us
+
+```{r}
+pdf_links <- unlist(pdfs)
+```
+
+we can then run a similar code that gets the web address of all the pdfs on each page
+
+we start with [1:5] just to test that it works before making it carry out a massive function, and we can remove that later
+
+we use html_elements twice so that we can get all pdfs from pages that have multiple
+
+```{r}
+pdfs_downed <- map(pdf_links, ~ {
+  .x %>% 
+    read_html() %>% 
+    html_elements(".related-content__items") %>% 
+    html_elements("a") %>% 
+    html_attr("href")
+})
+```
+
+we then unlist it into a new directory
+
+```{r}
+pdf_test <- unlist(pdfs_downed)
+```
+
+now let's give it a new folder to work in, so that it doesn't clog up the project space
+
+the ... tells it everything up to the folder we want, so we don't have to type out the entire route
+
+now, we can finally download all of the files
+
+```{r}
+setwd("~/Journo Code/JOM511/Week 6/data")
+
+for (pdf in pdf_test) {
+  download.file(pdf, destfile = paste0(basename(pdf)), 
+                quiet = FALSE,
+                mode = "wb")
+}
+```
+
+best for these kinds of things to upload onto github servers to avoid clogging up laptop storage
